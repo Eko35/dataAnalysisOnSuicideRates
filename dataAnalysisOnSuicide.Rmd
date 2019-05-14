@@ -1,0 +1,140 @@
+---
+title: "dataAnalysisOnSuicide"
+output:
+  html_document:
+    code_folding: hide
+  pdf_document: default
+  header-includes: usepackage{color}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(magrittr)
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(sqldf)
+library(DT)
+```
+
+##**Question 1**
+
+```{r}
+rawdata <- read_csv("suicide.csv")
+rawdata <- rawdata %>% mutate_if(is.character, factor)
+rawdata %>% summary()
+nonaData <- rawdata
+nonaData <- nonaData %>% filter( !is.na(suicides_no) ) %>% filter( !is.na(population))
+
+d2 <- sqldf("SELECT country, year, SUM(suicides_no) AS totalsuicide, SUM(population) AS totalpopulation FROM nonaData WHERE year BETWEEN 1980 AND 2015 GROUP BY country, year")
+
+d2 <- d2 %>% mutate( ratio = totalsuicide / totalpopulation)
+
+d2 %>% ggplot(aes( year, ratio)) + geom_point()
+d2 %>% summary()
+
+
+
+
+
+d2 %>% datatable
+```
+
+###*Answer:*
+
+<span style="color:blue">I only consider data which are reported, from 1980 to 2005 there were more outlier points in the graph. After 2005 outlier points were reduced. Thus, after 2005 tendency to commit suicide seems reduced.</span> 
+
+
+
+
+
+##**Question 2**
+
+```{r}
+d3 <- rawdata
+d3[is.na(d3)] <- 0
+
+
+d3 <-  sqldf("SELECT country, year, SUM(suicides_no) AS totalsuicide, SUM(population) AS totalpopulation FROM d3 WHERE year BETWEEN 2006 AND 2015 GROUP BY country, year")
+d3 <- d3 %>% mutate( ratio = totalsuicide / totalpopulation)
+d3[is.infinite(d3[,5]), 5] <- 0
+d3[is.na(d3)] <- 0
+d3 <- arrange(d3, desc(ratio))
+d3 %>% datatable
+d3[c(1,8,14,15,16),]
+
+```
+
+###*Answer:*
+
+<span style="color:blue">Russian Federation and Republic of Korea has more number of total suicide than Lithuania, Suriname and Guyana. But in terms of suicide rate (total suicide incidences / total population of countries)
+1.Lithuania
+2.Republic Of Korea
+3.Suriname
+4.Russian Federation
+5.Guyana</span> 
+
+
+##**Question 3**
+
+```{r}
+d4 <- rawdata
+d5 <- sqldf("SELECT year,sex, SUM(suicides_no) AS totalsuicide, SUM(population) AS totalpopulation FROM d4 GROUP BY sex ,year")
+d5 <- d5 %>% mutate( ratio = totalsuicide / totalpopulation)
+d5 %>% ggplot(aes(year, ratio, color = sex)) + geom_point()
+d5 %>% ggplot(aes(year, ratio, group = sex)) + geom_boxplot()
+
+```
+
+###*Answer:*
+
+<span style="color:blue">Men's tendency to suicide over the years showed a very fluctuating graph. On the other hand, women's tendency to suicide over the years showed a very stable graph. As we see over the years both men and women are less likely to commit suicide. Around 2015 men's suicide rate shows significant reduction.</span> 
+
+##**Question 4**
+
+```{r}
+d6 <- rawdata
+d7 <- sqldf("SELECT year,age, SUM(suicides_no) AS totalsuicide, SUM(population) AS totalpopulation FROM d6 GROUP BY age ,year")
+d7 <- d7 %>% mutate( ratio = totalsuicide / totalpopulation)
+d7 %>% ggplot(aes(year, ratio, color = age)) + geom_point()
+d7 %>% ggplot(aes(year, ratio, group = age)) + geom_boxplot()
+```
+
+###*Answer:*
+
+<span style="color:blue">By looking at graph, people are more inclined to commit suicide as they get older. Over the years all age groups shows decrease and also after 2010 in all age groups significant decrease is observable. The suicide rate of age group 5-14 is close to zero over the years as expected.
+</span> 
+
+
+##**Question 5**
+
+```{r}
+trainDataForPop <- rawdata %>% filter(!is.na(population))
+testData <- rawdata %>% filter(is.na(population))
+trainDataForPop[is.na(trainDataForPop)] <- 0
+mod1 <- lm(population ~ year + sex + age + suicides_no, trainDataForPop )
+summary(mod1)
+mod3 <- lm(population ~ ., trainDataForPop )
+
+AIC(mod1,mod3)
+
+prePop<- predict(mod1,testData, type = "response")
+summary(prePop)
+
+
+#######
+
+trainDataForSuic <- rawdata %>% filter(!is.na(suicides_no))
+testDataSuic <- rawdata %>% filter(is.na(suicides_no))
+trainDataForSuic[is.na(trainDataForSuic)] <- 0
+mod2 <- lm(suicides_no ~ population + year + sex + age, trainDataForSuic )
+summary(mod2)
+
+preSui<- predict(mod2,testDataSuic, type = "response")
+summary(preSui)
+
+```
+###*Answer:*
+
+<span style="color:blue">In database we have 6 factors which are country, year, sex, age, number of suicides and population. Some of the entries of number of suicides and population are blank. So in order to predict those values, for instance population, we have to determine weight of each factor. If this prediction  contains only couple of data, by generating matrices and solving for pseudo-inverse is easy even by hand. Since database contains large data using linear regression method in R is easier. However, while predicting population and number of suicides, using country as a factor leads problem. In the dataset, due to blank entries, some countries' population within particular constraints is tried to be predicted without any population information about that country. So I remove the country as a factor (and also I compare mod1(5 factors) and mod3(4factors), mod1 is better than mod3 as expected by looking AIC). Thus, regression methods are appropriate for prediction.
+</span> 
